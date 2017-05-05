@@ -2,7 +2,7 @@ fchoose <- file.choose()
 slash <- gregexpr("/", fchoose)[[1]]
 setwd(substring(fchoose, 1, slash[length(slash)]))
 
-setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160526_LIFE_Rochefort")
+#setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160526_LIFE_Rochefort")
 #setwd("/home/jf/R/SOUNDS/batmetrics")
 #rm(list=ls())
 path <- getwd()
@@ -14,8 +14,8 @@ list.files(pattern = "wav",ignore.case=T)
 require(seewave)
 require(tuneR)
 #### Change filename and comment
-filename <- list.files(pattern = "wav",ignore.case=T)[2]
-PI <- "TrainMYODAU_20170505"
+filename <- list.files(pattern = "wav",ignore.case=T)[3]
+PI <- "TrainCouvin_1"
 smpl <- readWave(filename) # tuneR::readWave()
 #wave <- smpl
 #tr <- timer.abs(smpl@right, f=44100, threshold=10, msmooth = c(8820,50)) #resolution:2sec
@@ -39,7 +39,7 @@ smpl <- readWave(filename) # tuneR::readWave()
 #           Start.MinSec=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''"))
 
 # Detect noise level
-tr.noise <- timer(smpl@left, f=44100, threshold=5,msmooth=c(220.5, 90), plot=T)
+tr.noise <- timer(smpl@left, f=44100, threshold=15,msmooth=c(220.5, 90), plot=T)
 length(tr.noise$s.start)
 Mx <- numeric()
 for(i in 1:30){
@@ -60,21 +60,22 @@ system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B", noiseHet = 150,
 file.choose()
 setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160712_LIFE_Rochefort")
 list.files(pattern = "wav",ignore.case=T)
-AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(14,15)]
+AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(3,4,6,8,11,12,13)]
 #filename <- list.files(pattern = "wav",ignore.case=T)[14]
-PI <- "Heterodyne_BatMetrics_1"
+PI <- "Heterodyne_BatMetrics_Couvin_AutoThrld"
 sapply(AllFiles, function(x){
   filename <<- x
   smpl <- readWave(filename) # tuneR::readWave()
-  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H", noiseHet = 20,
-             myWL=512, amp.chk=5000)
+  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H")
 })
 
 ###################################
-system.time(BatMetrics(wave=smpl, info="TrainMYODAU_faibles&forts", typeOfAnalysis = "T", myWL=256))
+system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "T", myWL=256))
 
 
 system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H"))
+
+
 #BatMetrics(wave=smpl, info="TestHet", typeOfAnalysis = "H", noiseHet = noise)
 #BatMetrics(wave=smpl, info="test", typeOfAnalysis = "B", myWL=256)
 
@@ -109,10 +110,15 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
   if(typeOfAnalysis == "H" | typeOfAnalysis == "B"){
     smp.lch <- channel(wave, "left")
     main.rg <- range(smp.lch@left)
-    if((main.rg[2]-main.rg[1]) > 2000){ # Value of 2000 chosen empirically!! Discar empty samples
+    ###### Identify the background noise level
+    envel.Het <- env(smp.lch, f=44100, envt="abs", msmooth = c(220.5,90), plot=F)
+    name.diff_Het <- names(which(tail(abs(diff(table(cut(envel.Het,1000)))),-20) < 100 )[1]) ### BOF!
+    thHetAuto <- as.numeric(substring(name.diff_Het,2,regexpr(".",name.diff_Het, fixed=T)-1)) + 20 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
+    ########
+    if((main.rg[2]-main.rg[1]) > 2000){ # Value of 2000 chosen empirically!! Discard empty samples
       png(paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"),
           width = 600, height = 400, res=80)
-      timer.smpl.peaks <- timer.abs(smp.lch, threshold=noiseHet,
+      timer.smpl.peaks <- timer.abs(smp.lch, threshold=thHetAuto,
                                     msmooth=c(220.5, 90),plotoutline = F) # Résolution à 0.005 seconde
       dev.off()
       #length(timer.smpl.peaks$s) # number of peaks detected
@@ -135,15 +141,6 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       im2 <- c(0,0,i[2:lg-2])
       im3 <- c(0,0,0,i[3:lg-3])
       im4 <- c(0,0,0,0,i[4:lg-4])
-      
-      #      logi.ser <- (i < Dur.Int[2] & ip1 < Dur.Int[2]&
-      #                     ip2 < Dur.Int[2] &
-      #                     ip3 < Dur.Int[2] &
-      #                     ip4 < Dur.Int[2] ) |
-      #        (i < Dur.Int[2] & im1 < Dur.Int[2] &
-      #           im2 < Dur.Int[2] &
-      #           im3 < Dur.Int[2] &
-      #           im4 < Dur.Int[2] ) ## Detect 5 following gaps of < 0.6 sec
       
       logi.ser <- ((i < Dur.Int[2] & i > Dur.Int[1]) &
                      (ip1 < Dur.Int[2] & ip1 > Dur.Int[1]) &
@@ -400,7 +397,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                  SHEET_x, col.names = T, row.names = F,
                  startColumn = 2, startRow = nrow(DF.Het)+30,
                  colnamesStyle=cs_small,
-                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small))
+                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small, `4=cs_small`, `5=cs_blue`))
     if(exists("PotBuz")){addDataFrame(data.frame(PotBuz), SHEET_x, col.names = T, row.names = F,
                                       startColumn = 1, startRow = nrow(DF.Het)+30,
                                       colnamesStyle=cs_small,
@@ -424,11 +421,12 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     addDataFrame(data.frame(Chunk = names.chk,
                             Amplitude = rangeTE,
                             Accepted = logi.chk,
+                            AutoThsld= thSigAuto,
                             Start=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''")),
                  SHEET_x, col.names = T, row.names = F,
                  startColumn = 2, startRow = nrow(DF.TE)+21,
                  colnamesStyle=cs_small,
-                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small))
+                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small, `4=cs_small`, `5=cs_blue`))
     autoSizeColumn(SHEET_x, 1:10)
   }
   filenameNoExt <-  substring(filename,1,nchar(filename)-4)
