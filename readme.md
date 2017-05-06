@@ -1,4 +1,4 @@
-Title: "Tools to analyse bat activity and helps to measure signals"  
+Title: "Tools to analyse bat activity and help to measure signals"  
 Author: JF Godeau  
 
 ---
