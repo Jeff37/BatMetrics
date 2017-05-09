@@ -1,21 +1,19 @@
+rm(list=ls())
+require('tuneR')
+
 fchoose <- file.choose()
 slash <- gregexpr("/", fchoose)[[1]]
 setwd(substring(fchoose, 1, slash[length(slash)]))
-
 #setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160526_LIFE_Rochefort")
 #setwd("/home/jf/R/SOUNDS/batmetrics")
-#rm(list=ls())
-path <- getwd()
-path.stspt <- strsplit(path,"/")
+path.stspt <- strsplit(getwd(),"/")
 fol.name <- path.stspt[[1]][length(path.stspt[[1]])]
 ## Load wav file
 list.files(pattern = "wav",ignore.case=T)
 
-require(seewave)
-require(tuneR)
 #### Change filename and comment
-filename <- list.files(pattern = "wav",ignore.case=T)[3]
-PI <- "TrainCouvin_1"
+filename <- list.files(pattern = "wav",ignore.case=T)[2]
+PI <- "Roch"
 smpl <- readWave(filename) # tuneR::readWave()
 #wave <- smpl
 #tr <- timer.abs(smpl@right, f=44100, threshold=10, msmooth = c(8820,50)) #resolution:2sec
@@ -38,47 +36,45 @@ smpl <- readWave(filename) # tuneR::readWave()
 #           Start.sec=round(tr$s.start,2),
 #           Start.MinSec=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''"))
 
-# Detect noise level
-tr.noise <- timer(smpl@left, f=44100, threshold=15,msmooth=c(220.5, 90), plot=T)
-length(tr.noise$s.start)
-Mx <- numeric()
-for(i in 1:30){
-  Mx[i] <- median(env(cutw(channel(smpl, "left"),from=tr.noise$s.start[i] - 0.06
-                           , to=tr.noise$s.start[i] - 0.04, output = "Wave"), plot=F, envt="abs"))}
-LevelsAll <- fivenum(env(channel(smpl, "left"), plot=F, envt="abs"))
-Mx
-LevelsAll
-(noise <- fivenum(Mx)[4]+5)
-
+# Detect noise level => included in the function
+#tr.noise <- timer(smpl@left, f=44100, threshold=15,msmooth=c(220.5, 90), plot=T)
+#length(tr.noise$s.start)
+#Mx <- numeric()
+#for(i in 1:30){
+#  Mx[i] <- median(env(cutw(channel(smpl, "left"),from=tr.noise$s.start[i] - 0.06
+#                           , to=tr.noise$s.start[i] - 0.04, output = "Wave"), plot=F, envt="abs"))}
+#LevelsAll <- fivenum(env(channel(smpl, "left"), plot=F, envt="abs"))
+#Mx
+#LevelsAll
+#(noise <- fivenum(Mx)[4]+5)
 #
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B", noiseHet = 150,
-                       myWL=512, amp.chk=5000))
 
-#
+system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B",
+                       myWL=256, amp.chk=5000))
+
+system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B",
+                       myWL=256))
+
 
 ### Analyse en série
-file.choose()
-setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160712_LIFE_Rochefort")
-list.files(pattern = "wav",ignore.case=T)
-AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(3,4,6,8,11,12,13)]
-#filename <- list.files(pattern = "wav",ignore.case=T)[14]
-PI <- "Heterodyne_BatMetrics_Couvin_AutoThrld"
-sapply(AllFiles, function(x){
+#file.choose()
+#setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160712_LIFE_Rochefort")
+#list.files(pattern = "wav",ignore.case=T)
+AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(1:4,6:11)]
+#filename <- list.files(pattern = "wav",ignore.case=T)[8]
+PI <- "Het&TE_AutoThrld&recycleEnveloppe_WL256"
+system.time(sapply(AllFiles, function(x){
   filename <<- x
   smpl <- readWave(filename) # tuneR::readWave()
-  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H")
-})
+  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B", myWL=256)
+}))
 
 ###################################
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "T", myWL=256))
-
-
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H"))
-
-
+#system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "T", myWL=256))
+#smpl <- readWave(list.files(pattern = "wav",ignore.case=T)[4])
+#system.time(BatMetrics(wave=smpl, info=paste(PI,"+10"), typeOfAnalysis = "H"))
 #BatMetrics(wave=smpl, info="TestHet", typeOfAnalysis = "H", noiseHet = noise)
 #BatMetrics(wave=smpl, info="test", typeOfAnalysis = "B", myWL=256)
-
 #
 ##
 #####
@@ -97,7 +93,9 @@ system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "H"))
 ##
 #
 BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
-                       myWL=512, amp.chk=1300, thSig=700, noiseHet=noise){
+                       myWL=512, amp.chk=1300
+                       #                       , thSig=700, noiseHet=noise # Deprecated since the threshold is computed automatically
+){
   ### PACKAGES ##########
   require('seewave')
   require('xlsx')
@@ -112,14 +110,19 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     main.rg <- range(smp.lch@left)
     ###### Identify the background noise level
     envel.Het <- env(smp.lch, f=44100, envt="abs", msmooth = c(220.5,90), plot=F)
-    name.diff_Het <- names(which(tail(abs(diff(table(cut(envel.Het,1000)))),-20) < 100 )[1]) ### BOF!
-    thHetAuto <- as.numeric(substring(name.diff_Het,2,regexpr(".",name.diff_Het, fixed=T)-1)) + 20 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
+    name.diff_Het <- names(which(tail(abs(diff(table(cut(envel.Het,1000)))),-20) < 100 )[1]) ### Consider a drop of 100 units between to classes (cut(1000) ... BOF!?
+    thHetAuto <- as.numeric(substring(
+      name.diff_Het,2,
+      regexpr(",",name.diff_Het, fixed=T)-1)) + 10 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated. I kept an empirical value of +10 from the calculated threshold.
     ########
     if((main.rg[2]-main.rg[1]) > 2000){ # Value of 2000 chosen empirically!! Discard empty samples
       png(paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"),
           width = 600, height = 400, res=80)
-      timer.smpl.peaks <- timer.abs(smp.lch, threshold=thHetAuto,
-                                    msmooth=c(220.5, 90),plotoutline = F) # Résolution à 0.005 seconde
+      timer.smpl.peaks <- timer.abs(smp.lch,
+                                    threshold=thHetAuto, # use the threshold computed inside od the function
+                                    EnvelExist=envel.Het, # tells to recycle the enveloppe computed to determin automatic threshold
+                                    msmooth=c(220.5, 90), # Resolution : 0.005 seconde
+                                    plotoutline = F) # 
       dev.off()
       #length(timer.smpl.peaks$s) # number of peaks detected
       #timer.smpl.peaks # detail
@@ -145,13 +148,15 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       logi.ser <- ((i < Dur.Int[2] & i > Dur.Int[1]) &
                      (ip1 < Dur.Int[2] & ip1 > Dur.Int[1]) &
                      (ip2 < Dur.Int[2] & ip2 > Dur.Int[1]) &
-                     (ip3 < Dur.Int[2] & ip3 > Dur.Int[1]) &
-                     (ip4 < Dur.Int[2] & ip4 > Dur.Int[1])) |
+                     (ip3 < Dur.Int[2] & ip3 > Dur.Int[1])
+                   #                     &(ip4 < Dur.Int[2] & ip4 > Dur.Int[1])
+      ) |
         ((i < Dur.Int[2] & i > Dur.Int[1]) &
            (im1 < Dur.Int[2] & im1 > Dur.Int[1]) &
            (im2 < Dur.Int[2] & im2 > Dur.Int[1]) &
-           (im3 < Dur.Int[2] & im3 > Dur.Int[1]) &
-           (im4 < Dur.Int[2] & im4 > Dur.Int[1])) ## Detect 5 following gaps of < 0.6 sec
+           (im3 < Dur.Int[2] & im3 > Dur.Int[1])
+         #           &(im4 < Dur.Int[2] & im4 > Dur.Int[1])
+        ) ## Detect 4 following gaps of < 0.6 sec
       logi.buz <- (i < Dur.Int[1] & ip1 < Dur.Int[1] & ip2 < Dur.Int[1] &
                      ip3 < Dur.Int[1] & ip4 < Dur.Int[1]) ## Detect 5 following gaps of < 0.01 sec
       
@@ -191,7 +196,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     png(paste0(substr(filename,1,nchar(filename)-4),"_GlobTE.png"),
         width = 600, height = 400, res=80)
     #tr <- timer(smp.rch, threshold=7, msmooth = c(4410,0), power=0.5) #resolution:1sec
-    tr <- timer.abs(smpl@right, f=44100, threshold=10, msmooth = c(8820,50)) #resolution: 2 sec
+    tr <- timer.abs(smp.rch, threshold=10, msmooth = c(8820,50)) #resolution: 2 sec
     dev.off()
     # Correct timer to not include gaps of less tha 1.7 sec
     logiGapTE <- c(TRUE, tr$p[-c(1, length(tr$p))] > 1.7 ,TRUE)
@@ -216,7 +221,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       tr$s.end[Nchunk] <- length(smp.rch) / smp.rch@samp.rate}
     chnk <- list()
     tr.chk <- list()
-    logi.chk <- c()
+    logi.chk <- logi.chk.amp <- logi.chk.voice <- c()
     rangeTE <- c()
     thSigAuto <- numeric()
     ### Loop detection of signals
@@ -226,16 +231,31 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       mainTE.rg <- range(chnk[[j]])
       rangeTE[j] <- mainTE.rg[2] - mainTE.rg[1]
       ## Collect logical for actually analysed chunks
-      logi.chk[j] <- rangeTE[j] > amp.chk
+      ### ... with amplitude manual feature
+      logi.chk.amp[j] <- rangeTE[j] > amp.chk
+      ### ... with voice feature
+      specVoice <- spec(chnk[[j]], f=44100, plot=F, fftw = T)
+      logi.chk.voice[j] <- (sum(
+        specVoice[(specVoice[,1] < 12 & specVoice[,1] > 8) ,
+                  2]) / sum(specVoice[,2])) < 0.3 # Considered as voice if > 30% of chunk's spectrum lies between 8 and 12 kHz
+      logi.chk[j] <- logi.chk.amp[j] & logi.chk.voice[j]
       if(logi.chk[j]){
-        #        tr.chk[[j]] <- timer(chnk[[j]], f=44100, threshold=thSig, msmooth = c(44.1,0), power=1.2, plot=T)
         ## FIRST step detect the background noise. It calculates enveloppe and later the timer will
-        ## reuse the same enveloppe. For the test phase enveloppe is computed two times, later I'll modify
-        ## timer.abs() in order to RE-USE the enveloppe and speed up processing
-        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,90), plot=F)
-        name.diff_1 <- names(which(abs(diff(table(cut(envel,1000)))) < 1000)[1])
-        thSigAuto[j] <- as.numeric(substring(name.diff_1,2,regexpr(".",name.diff_1, fixed=T)-1)) + 1 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
-        tr.chk[[j]] <- timer.abs(chnk[[j]], f=44100, threshold=thSigAuto[j], msmooth = c(44.1,90), plot=T)
+        ## reuse the same enveloppe
+        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,0), plot=F)
+        rg <- range(envel)[2] - range(envel)[1] # ca. 2000 => cut 500 breaks!?
+        distriEnvel <- table(cut(envel, rg/20))
+        whichPeak <- which.max(distriEnvel)
+        name95 <- names(which(
+          cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[4])
+#        name.diff_1 <- names(which.min(diff(tail(distriEnvel,-whichPeak))))
+        thSigAuto[j] <- round(as.numeric(substring(name95,2,
+                                                   regexpr(",",name95, fixed=T)-1)) + 10) # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
+        tr.chk[[j]] <- timer.abs(chnk[[j]],
+                                 f=44100,
+                                 threshold=thSigAuto[j],
+                                 msmooth = c(44.1,90),
+                                 plot=F, plotoutline = F)
         ### make equal length of start and end vectors by adding -if unequal- total length
         if(length(tr.chk[[j]]$s.start) > length(tr.chk[[j]]$s.end)){
           tr.chk[[j]]$s.end[length(tr.chk[[j]]$s.start)] <- (length(chnk[[j]]) / 44100)-0.05}
@@ -256,7 +276,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
         tr.chk[[cnb]]$s.end <- tr.chk[[cnb]]$s.end[c(logiNotSplitSignal[-1],T)]
         tr.chk[[cnb]]$s <- tr.chk[[cnb]]$s.end - tr.chk[[cnb]]$s.start
         ##############
-        logi.len <- tr.chk[[cnb]]$s > 0.010 # ~min threshold 0.011 for signals (!! may ignore some short MYOBRA !!)~
+        logi.len <- tr.chk[[cnb]]$s > 0.010 # ~min threshold 0.010 for signals (!! may ignore some short MYOBRA !!)~
         Nsig <- length(tr.chk[[cnb]]$s[logi.len])
         st <- tr.chk[[cnb]]$s.start[logi.len]
         nd <- tr.chk[[cnb]]$s.end[logi.len]
@@ -316,10 +336,19 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     })
     #lis
     DF.TE <- do.call("rbind",lis)
-    if(dim(DF.TE)[1] != 0){
-      if(dim(DF.TE)[1] > 1){itv <- 100 * (c(DF.TE$StartInSeq[-1],0) - DF.TE$StartInSeq)
-      DF.TE$Intervalle <- c(itv[-dim(DF.TE)[1]], NA)} else {DF.TE$Intervalle <- NA}
-    }    
+    if(is.null(DF.TE)){
+      DF.TE <- data.frame(Chunk = NA,
+                          FME = NA,
+                          FI = NA,
+                          FT = NA,
+                          LB = NA,
+                          Durée = NA,
+                          StartInSeq = NA,
+                          Intervalle = NA,
+                          DiagQFC = NA)
+    }
+    if(dim(DF.TE)[1] > 1){itv <- 100 * (c(DF.TE$StartInSeq[-1],0) - DF.TE$StartInSeq)
+    DF.TE$Intervalle <- c(itv[-dim(DF.TE)[1]], 100)} else {DF.TE$Intervalle <- NA}
     discNul <- DF.TE$Durée < 5 & DF.TE$LB < 7 | # Discard echoes (e.g.on QFC) and voice
       DF.TE$Intervalle < 5 |
       DF.TE$Durée > 25 | #discard all Durée > 35 ms, extremes!!?? changed to 25 
@@ -330,26 +359,38 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       DF.TE$FT > 50 | # discard high FT
       DF.TE$FME > DF.TE$FI # discard impossible values i.e. FME > FI
     DF.TE <- DF.TE[!discNul,]
-    if(dim(DF.TE)[1] != 0){
-      if(dim(DF.TE)[1] > 1){itv <- 100 * (c(DF.TE$StartInSeq[-1],0) - DF.TE$StartInSeq)
-      DF.TE$Intervalle <- c(itv[-dim(DF.TE)[1]], NA)} else {DF.TE$Intervalle <- NA}
-    }    
-    #DF.TE
+    if(dim(DF.TE)[1] > 1){itv <- 100 * (c(DF.TE$StartInSeq[-1],0) - DF.TE$StartInSeq)
+    DF.TE$Intervalle <- c(itv[-dim(DF.TE)[1]], NA)}
+    #else {DF.TE$Intervalle <- NA}
+    if(dim(DF.TE)[1] == 0){
+      DF.TE <- data.frame(Chunk = NA,
+                          FME = NA,
+                          FI = NA,
+                          FT = NA,
+                          LB = NA,
+                          Durée = NA,
+                          StartInSeq = NA,
+                          Intervalle = NA,
+                          DiagQFC = NA)
+    }
     #### GGPLOT GRAPHS ######
-    ggplot(DF.TE, aes(x = Durée, y = FT, colour = Chunk)) +
-      geom_point() + ggtitle(info) +
-      geom_hline(yintercept = c(23,30), linetype=c(2,2), size=c(0.4,0.4)) +
-      scale_y_continuous(limits=range(DF.TE$FT)) + theme_grey(12)
-    ggsave(paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"),
-           scale=1.5)
-    ggplot(DF.TE, aes(x = LB, y = FME, colour = Chunk)) +
-      geom_point() + ggtitle(info) +
-      geom_vline(xintercept = 5, linetype=2, size=0.7) +
-      scale_x_continuous(limits=range(DF.TE$LB)) + theme_grey(12)
-    ggsave(paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"),
-           scale=1.5)
+    if(!is.na(DF.TE$FME)){
+      ggplot(DF.TE, aes(x = Durée, y = FT, colour = Chunk)) +
+        geom_point() + ggtitle(info) +
+        geom_hline(yintercept = c(23,30), linetype=c(2,2), size=c(0.4,0.4)) +
+        scale_y_continuous(limits=range(DF.TE$FT)) + theme_grey(12)
+      ggsave(paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"),
+             scale=1.5)
+      ggplot(DF.TE, aes(x = LB, y = FME, colour = Chunk)) +
+        geom_point() + ggtitle(info) +
+        geom_vline(xintercept = 5, linetype=2, size=0.7) +
+        scale_x_continuous(limits=range(DF.TE$LB)) + theme_grey(12)
+      ggsave(paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"),
+             scale=1.5)}
   }
   #### EXPORT XLSX ######
+  length(thSigAuto) <- length(logi.chk) # Make vectors the same length (add NA if needed)
+  ###
   wb <- createWorkbook(type="xlsx")
   # Styles
   cs_blue <- CellStyle(wb) + Font(wb, heightInPoints=10, color="blue")  # blue caract
@@ -385,19 +426,23 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     autoSizeColumn(SHEET_x, 6:17)
     addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_GlobTE.png"), scale=0.5
                ,sheet=SHEET_x,startColumn = 1, startRow = nrow(DF.Het)+16)
-    addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"), scale=0.7
-               ,sheet=SHEET_x,startColumn = 17)
-    addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"), scale=0.7
-               ,sheet=SHEET_x,startColumn = 25)
-    addDataFrame(data.frame(Chunk = names.chk,
-                            Amplitude = rangeTE,
-                            Accepted = logi.chk,
-                            AutoThsld= thSigAuto,
-                            Start=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''")),
-                 SHEET_x, col.names = T, row.names = F,
-                 startColumn = 2, startRow = nrow(DF.Het)+30,
-                 colnamesStyle=cs_small,
-                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small, `4=cs_small`, `5=cs_blue`))
+    if(!is.na(DF.TE$FME)){
+      addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"), scale=0.7
+                 ,sheet=SHEET_x,startColumn = 17)
+      addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"), scale=0.7
+                 ,sheet=SHEET_x,startColumn = 25)
+      addDataFrame(data.frame(Chunk = names.chk,
+                              Amplitude = rangeTE,
+                              Accepted = logi.chk,
+                              AutoThsld= thSigAuto,
+                              Start=paste0(tr$s.start %/% 60,"'",
+                                           round(tr$s.start %% 60,1),"''")),
+                   SHEET_x, col.names = T, row.names = F,
+                   startColumn = 2, startRow = nrow(DF.Het)+30,
+                   colnamesStyle=cs_small,
+                   colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small,
+                                 `4`=cs_small, `5`=cs_blue))
+    }
     if(exists("PotBuz")){addDataFrame(data.frame(PotBuz), SHEET_x, col.names = T, row.names = F,
                                       startColumn = 1, startRow = nrow(DF.Het)+30,
                                       colnamesStyle=cs_small,
@@ -414,25 +459,32 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                                `6`=cs_numTab, `7`=cs_numTab, `8`=cs_numTab))
     addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_GlobTE.png"), scale=0.7
                ,sheet=SHEET_x,startColumn = 1, startRow = nrow(DF.TE)+3)
-    addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"), scale=0.8
-               ,sheet=SHEET_x,startColumn = 13)
-    addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"), scale=0.8
-               ,sheet=SHEET_x,startColumn = 19)
-    addDataFrame(data.frame(Chunk = names.chk,
-                            Amplitude = rangeTE,
-                            Accepted = logi.chk,
-                            AutoThsld= thSigAuto,
-                            Start=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''")),
-                 SHEET_x, col.names = T, row.names = F,
-                 startColumn = 2, startRow = nrow(DF.TE)+21,
-                 colnamesStyle=cs_small,
-                 colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small, `4=cs_small`, `5=cs_blue`))
+    if(!is.na(DF.TE$FME)){
+      addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FT-Durée.png"), scale=0.8
+                 ,sheet=SHEET_x,startColumn = 13)
+      addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_Plot_FME-LB.png"), scale=0.8
+                 ,sheet=SHEET_x,startColumn = 19)
+      addDataFrame(data.frame(Chunk = names.chk,
+                              Amplitude = rangeTE,
+                              Accepted = logi.chk,
+                              AutoThsld= thSigAuto,
+                              Start=paste0(tr$s.start %/% 60,"'",
+                                           round(tr$s.start %% 60,1),"''")),
+                   SHEET_x, col.names = T, row.names = F,
+                   startColumn = 2, startRow = nrow(DF.TE)+21,
+                   colnamesStyle=cs_small,
+                   colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small,
+                                 `4`=cs_small, `5`=cs_blue))
+    }
     autoSizeColumn(SHEET_x, 1:10)
   }
   filenameNoExt <-  substring(filename,1,nchar(filename)-4)
   saveWorkbook(wb, paste0(fol.name,"_",filenameNoExt,"_",info,"_WL",myWL,".xlsx"))
   
 }
+
+
+
 
 #### The function timer{seewave} of Jérôme Sueur is adapted for my needs to control an absolute
 #### scale allowing to define a common noise background and thresholds for signals detection.
@@ -442,7 +494,8 @@ timer.abs <- function (wave, f, threshold = 400, dmin = NULL, envt = "abs",
                        power = 1, msmooth = NULL, ksmooth = NULL, ssmooth = NULL, 
                        tlim = NULL, plot = TRUE, plotthreshold = TRUE,
                        plotoutline=TRUE, col = "black", 
-                       colval = "red", xlab = "Time (s)", ylab = "Amplitude", ...) 
+                       colval = "red", xlab = "Time (s)", ylab = "Amplitude",
+                       EnvelExist=NULL,...) 
 {
   input <- inputw(wave = wave, f = f)
   wave <- input$w
@@ -470,8 +523,10 @@ timer.abs <- function (wave, f, threshold = 400, dmin = NULL, envt = "abs",
     wave <- cutw(wave, f = f, from = tlim[1], to = tlim[2])
     n <- length(wave)
   }
-  wave1 <- env(wave = wave, f = f, msmooth = msmooth, ksmooth = ksmooth, 
-               ssmooth = ssmooth, envt = envt, norm = FALSE, plot = FALSE)
+  if(is.null(EnvelExist)){
+    wave1 <- env(wave = wave, f = f, msmooth = msmooth, ksmooth = ksmooth, 
+                 ssmooth = ssmooth, envt = envt, norm = FALSE, plot = FALSE)
+  } else {wave1 <- EnvelExist}
   n1 <- length(wave1)
   f1 <- f * (n1/n)
   if (power != 1) 
