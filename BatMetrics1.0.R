@@ -4,86 +4,29 @@ require('tuneR')
 fchoose <- file.choose()
 slash <- gregexpr("/", fchoose)[[1]]
 setwd(substring(fchoose, 1, slash[length(slash)]))
-#setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160526_LIFE_Rochefort")
 #setwd("/home/jf/R/SOUNDS/batmetrics")
 path.stspt <- strsplit(getwd(),"/")
 fol.name <- path.stspt[[1]][length(path.stspt[[1]])]
 ## Load wav file
 list.files(pattern = "wav",ignore.case=T)
 
-#### Change filename and comment
-filename <- list.files(pattern = "wav",ignore.case=T)[2]
-PI <- "Roch"
+#### Analyse par fichier: change filename and comment
+filename <- list.files(pattern = "wav",ignore.case=T)[3]
+PI <- "Het&TE_Huqueny2016_SessII"
 smpl <- readWave(filename) # tuneR::readWave()
-#wave <- smpl
-#tr <- timer.abs(smpl@right, f=44100, threshold=10, msmooth = c(8820,50)) #resolution:2sec
-#(Nchunk <- length(tr$s.start))
-#names.chk <- paste0("Chunk_",1:Nchunk)
-### make equal length of start and end vectors by adding -if unequal- total length
-#if(Nchunk > length(tr$s.end)){
-#  tr$s.end[Nchunk] <- length(smpl@right) / 44100}
-#chnk <- list()
-#rangeTE <- c()
-### Loop detection of signals
-#for(j in 1:Nchunk){
-#  chnk[[j]] <- cutw(smpl@right, f=44100,
-#                    from= tr$s.start[j], to=tr$s.end[j])
-#  mainTE.rg <- range(chnk[[j]])
-#  rangeTE[j] <- mainTE.rg[2] - mainTE.rg[1]
-#}
-#data.frame(CHUNK=names.chk,
-#           RANGE=rangeTE,
-#           Start.sec=round(tr$s.start,2),
-#           Start.MinSec=paste0(tr$s.start %/% 60,"'",round(tr$s.start %% 60,1),"''"))
-
-# Detect noise level => included in the function
-#tr.noise <- timer(smpl@left, f=44100, threshold=15,msmooth=c(220.5, 90), plot=T)
-#length(tr.noise$s.start)
-#Mx <- numeric()
-#for(i in 1:30){
-#  Mx[i] <- median(env(cutw(channel(smpl, "left"),from=tr.noise$s.start[i] - 0.06
-#                           , to=tr.noise$s.start[i] - 0.04, output = "Wave"), plot=F, envt="abs"))}
-#LevelsAll <- fivenum(env(channel(smpl, "left"), plot=F, envt="abs"))
-#Mx
-#LevelsAll
-#(noise <- fivenum(Mx)[4]+5)
-#
-
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B",
-                       myWL=256, amp.chk=5000))
-
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B",
-                       myWL=256))
-
+system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B"))
 
 ### Analyse en série
-#file.choose()
-#setwd("/media/jeff/Médiathèque/Audio/Chiroptera/00_Backup_Recordings/0_Analyse_OK/20160712_LIFE_Rochefort")
-#list.files(pattern = "wav",ignore.case=T)
-AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(1:4,6:11)]
-#filename <- list.files(pattern = "wav",ignore.case=T)[8]
-PI <- "Het&TE_AutoThrld&recycleEnveloppe_WL256"
+AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(5:8)]
+PI <- "Het&TE_Huqueny2016_SessII"
 system.time(sapply(AllFiles, function(x){
   filename <<- x
   smpl <- readWave(filename) # tuneR::readWave()
-  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B", myWL=256)
+  BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B")
 }))
 
 ###################################
-#system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "T", myWL=256))
-#smpl <- readWave(list.files(pattern = "wav",ignore.case=T)[4])
-#system.time(BatMetrics(wave=smpl, info=paste(PI,"+10"), typeOfAnalysis = "H"))
-#BatMetrics(wave=smpl, info="TestHet", typeOfAnalysis = "H", noiseHet = noise)
-#BatMetrics(wave=smpl, info="test", typeOfAnalysis = "B", myWL=256)
-#
-##
 #####
-
-
-
-
-
-
 
 
 
@@ -93,7 +36,7 @@ system.time(sapply(AllFiles, function(x){
 ##
 #
 BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
-                       myWL=512, amp.chk=1300
+                       myWL=256, amp.chk=500
                        #                       , thSig=700, noiseHet=noise # Deprecated since the threshold is computed automatically
 ){
   ### PACKAGES ##########
@@ -113,19 +56,19 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     name.diff_Het <- names(which(tail(abs(diff(table(cut(envel.Het,1000)))),-20) < 100 )[1]) ### Consider a drop of 100 units between to classes (cut(1000) ... BOF!?
     thHetAuto <- as.numeric(substring(
       name.diff_Het,2,
-      regexpr(",",name.diff_Het, fixed=T)-1)) + 10 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated. I kept an empirical value of +10 from the calculated threshold.
-    ########
-    if((main.rg[2]-main.rg[1]) > 2000){ # Value of 2000 chosen empirically!! Discard empty samples
+      regexpr(",",name.diff_Het, fixed=T)-1)) + 5 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated. I kept an empirical value of +10 from the calculated threshold.
+########
+    if((main.rg[2]-main.rg[1]) > 2000){# Value of 2000 chosen empirically!! Discard empty samples
+      logi.Het <- TRUE
       png(paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"),
           width = 600, height = 400, res=80)
       timer.smpl.peaks <- timer.abs(smp.lch,
                                     threshold=thHetAuto, # use the threshold computed inside od the function
                                     EnvelExist=envel.Het, # tells to recycle the enveloppe computed to determin automatic threshold
-                                    msmooth=c(220.5, 90), # Resolution : 0.005 seconde
-                                    plotoutline = F) # 
+                                    #                                    msmooth=c(220.5, 90), # Resolution : 0.005 seconde
+                                    plotoutline = F,
+                                    main=paste0(filename," : Left channel (Heterodyne)")) # 
       dev.off()
-      #length(timer.smpl.peaks$s) # number of peaks detected
-      #timer.smpl.peaks # detail
       
       if(timer.smpl.peaks$first == "pause"){
         i <- timer.smpl.peaks$p
@@ -187,7 +130,8 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       DF.Het <- data.frame(t(DF))
       DF.Het$Full5sec <- as.numeric(as.character(DF.Het$Full5sec))
       DF.Het$TimeStart <- as.numeric(as.character(DF.Het$TimeStart))
-    } else {DF.Het <- data.frame(Folder=fol.name, Full5sec= "Pas de contact hétérodyne")}
+    } else {DF.Het <- data.frame(Folder=fol.name, Full5sec= "Pas de contact hétérodyne")
+    logi.Het <- FALSE}
   }
   ### TIME EXPANSION ####
   if(typeOfAnalysis == "T" | typeOfAnalysis == "B"){
@@ -195,25 +139,20 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     ##### Detect chunks of time expansion
     png(paste0(substr(filename,1,nchar(filename)-4),"_GlobTE.png"),
         width = 600, height = 400, res=80)
-    #tr <- timer(smp.rch, threshold=7, msmooth = c(4410,0), power=0.5) #resolution:1sec
-    tr <- timer.abs(smp.rch, threshold=10, msmooth = c(8820,50)) #resolution: 2 sec
+    tr <- timer.abs(smp.rch, threshold=10, msmooth = c(8820,50)
+                    , main=paste0(filename, " : right channel (Time expansion)\nDetect chunks")) #resolution: 2 sec
     dev.off()
     # Correct timer to not include gaps of less tha 1.7 sec
     logiGapTE <- c(TRUE, tr$p[-c(1, length(tr$p))] > 1.7 ,TRUE)
     S_Start <- tr$s.start[logiGapTE[-length(logiGapTE)]]
     S_End <- tr$s.end[logiGapTE[-1]]
     tr$s.start <- S_Start
-    tr$s.end <- S_End
-    #if(tr$first == "signal"){
-    #  s <- tr$s
-    #  p <- tr$p
-    #  s.start <- tr$s.start
-    #  s.end <- tr$s.end
-    #  tr$s <- p
-    #  tr$p <- s[-1]
-    #  tr$s.start <- s.end
-    #  tr$s.end <- s.start[-1]
-    #}
+    if(length(S_End) < length(S_Start)){
+      tr$s.end <- c(S_End,duration(wave))} else{
+        tr$s.end <- S_End
+      }
+    tr$s <- tr$s.end - tr$s.start
+
     Nchunk <- length(tr$s.start)
     names.chk <- paste0("Chunk_",1:Nchunk)
     ### make equal length of start and end vectors by adding -if unequal- total length
@@ -232,7 +171,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       rangeTE[j] <- mainTE.rg[2] - mainTE.rg[1]
       ## Collect logical for actually analysed chunks
       ### ... with amplitude manual feature
-      logi.chk.amp[j] <- rangeTE[j] > amp.chk
+      logi.chk.amp[j] <- rangeTE[j] > amp.chk & tr$s[j] > 5
       ### ... with voice feature
       specVoice <- spec(chnk[[j]], f=44100, plot=F, fftw = T)
       logi.chk.voice[j] <- (sum(
@@ -240,29 +179,39 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                   2]) / sum(specVoice[,2])) < 0.3 # Considered as voice if > 30% of chunk's spectrum lies between 8 and 12 kHz
       logi.chk[j] <- logi.chk.amp[j] & logi.chk.voice[j]
       if(logi.chk[j]){
-        ## FIRST step detect the background noise. It calculates enveloppe and later the timer will
-        ## reuse the same enveloppe
-        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,0), plot=F)
-        rg <- range(envel)[2] - range(envel)[1] # ca. 2000 => cut 500 breaks!?
-        distriEnvel <- table(cut(envel, rg/20))
-        whichPeak <- which.max(distriEnvel)
-        name95 <- names(which(
-          cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[4])
-#        name.diff_1 <- names(which.min(diff(tail(distriEnvel,-whichPeak))))
-        thSigAuto[j] <- round(as.numeric(substring(name95,2,
-                                                   regexpr(",",name95, fixed=T)-1)) + 10) # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
+        ## FIRST step detect the background noise.
+        envel <- as.vector(env(chnk[[j]], f=44100, envt="abs"
+                               , msmooth = c(441,0), plot=F))
+        envelTrun <- envel[envel < 400 & envel > 100] # truncate envel to min 100 & max 400 to find max of noise!
+        rg <- range(envel)[2] - range(envel)[1] 
+        distriEnvel <- table(cut(envelTrun, 150))
+        Peak <- names(which.max(distriEnvel))
+        # max + rg/200 ??
+        thSigAuto[j] <- round(as.numeric(substring(Peak,2,
+                                                   regexpr(",",Peak, fixed=T)-1)) + 400) # +350-400 ou max + range/90 càd 90% range/100
+#        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,0), plot=F)
+#        rg <- range(envel)[2] - range(envel)[1] # ca. 2000 => cut 500 breaks!?
+#        distriEnvel <- table(cut(envel, rg/20))
+#        whichPeak <- which.max(distriEnvel)
+#        name95 <- names(which(
+#          cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[2])
+#        if(is.na(name95)){
+#          name95 <- names(which(
+#            cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[1])
+#        }
+#        thSigAuto[j] <- round(as.numeric(substring(name95,2,
+#                                                   regexpr(",",name95, fixed=T)-1)) + 10) # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
         tr.chk[[j]] <- timer.abs(chnk[[j]],
                                  f=44100,
                                  threshold=thSigAuto[j],
                                  msmooth = c(44.1,90),
-                                 plot=F, plotoutline = F)
+                                 plot=T, plotoutline = F, main=paste("Chunk",j))
         ### make equal length of start and end vectors by adding -if unequal- total length
         if(length(tr.chk[[j]]$s.start) > length(tr.chk[[j]]$s.end)){
           tr.chk[[j]]$s.end[length(tr.chk[[j]]$s.start)] <- (length(chnk[[j]]) / 44100)-0.05}
       }
     }
     names(chnk[logi.chk]) <- names(tr.chk[logi.chk]) <- names.chk[logi.chk]
-    #paste(paste(names.chk,rangeTE,sep=": "), collapse=" ; ")
     #### Measurments of all chunks
     lis <- lapply((1:Nchunk)[logi.chk], function(cnb){
       if(class(tr.chk[[cnb]]) == "list"){
@@ -412,8 +361,8 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                                       colnamesStyle=cs_small,
                                       colStyle=list(`1`=cs_small, `2`=cs_small, `3`=cs_small))}
     autoSizeColumn(SHEET_x, 1:5)
-    addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"), scale=0.5
-               ,sheet=SHEET_x,startColumn = 1, startRow = nrow(DF.Het)+3)
+    if(logi.Het){addPicture(file=paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"), scale=0.5
+               ,sheet=SHEET_x,startColumn = 1, startRow = nrow(DF.Het)+3)}
   }
   if(typeOfAnalysis == "B"){
     addDataFrame(DF.TE,SHEET_x
@@ -480,7 +429,6 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
   }
   filenameNoExt <-  substring(filename,1,nchar(filename)-4)
   saveWorkbook(wb, paste0(fol.name,"_",filenameNoExt,"_",info,"_WL",myWL,".xlsx"))
-  
 }
 
 
