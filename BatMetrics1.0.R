@@ -10,21 +10,21 @@ fol.name <- path.stspt[[1]][length(path.stspt[[1]])]
 ## Load wav file
 list.files(pattern = "wav",ignore.case=T)
 
-#### Analyse par fichier: change filename and comment
-filename <- list.files(pattern = "wav",ignore.case=T)[13]
-PI <- "Het&TE_Huqueny2016_SessII"
-smpl <- readWave(filename) # tuneR::readWave()
-system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B"))
-
 ### Analyse en série
-AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(2:7,11:12)]
-PI <- "Het&TE_Huqueny2016_SessII"
+AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(1:5,7,9)]
+PI <- "Het&TE_Ramioul2016_SessI"
 system.time(sapply(AllFiles, function(x){
   filename <<- x
   smpl <- readWave(filename) # tuneR::readWave()
   BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B")
-#  dev.off() # just in case!!
 }))
+
+#### Analyse par fichier: change filename and comment
+filename <- list.files(pattern = "wav",ignore.case=T)[5]
+PI <- "Het&TE_Doische2016_SessII"
+smpl <- readWave(filename) # tuneR::readWave()
+#wave <- readWave(filename) # tuneR::readWave()
+system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B", ShowChunks = T, myWL = 512))
 
 ###################################
 #####
@@ -37,7 +37,8 @@ system.time(sapply(AllFiles, function(x){
 ##
 #
 BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
-                       myWL=256, amp.chk=500){
+                       myWL=256, amp.chk=500,
+                       ShowChunks=FALSE, MuteXLSXoutput=TRUE){
   ### PACKAGES ##########
   require('seewave')
   require('xlsx')
@@ -53,13 +54,16 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     ###### Identify the background noise level
     envel.Het <- env(smp.lch, f=44100, envt="abs", msmooth = c(220.5,90), plot=F)
     rg.Het <- range(envel.Het)[2] - range(envel.Het)[1] 
-    distriEnvel <- table(cut(envel.Het, round(rg.Het/10)))
+    distriEnvel <- table(cut(envel.Het, round(rg.Het/5)))
     Peak <- names(which.max(distriEnvel))
-    thHetAuto <- round(as.numeric(substring(Peak,2,
-                                               regexpr(",",Peak, fixed=T)-1)) + 50) # +50 => **very** sensible!!
-########
+    thHetAuto_Peak <- as.numeric(substring(Peak,
+                                            regexpr(",", Peak, fixed=T)+1,
+                                            regexpr("]", Peak, fixed=T)-1))
+    thHetAuto <- round(thHetAuto_Peak + (thHetAuto_Peak/1.5)) # Automatic threshold is dependent on the max value of background noise
+    ########
     if((main.rg[2]-main.rg[1]) > 2000){# Value of 2000 chosen empirically!! Discard empty samples
       logi.Het <- TRUE
+      if(dev.cur() > 1) dev.off()
       png(paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"),
           width = 600, height = 400, res=80)
       timer.smpl.peaks <- timer.abs(smp.lch, # Cosmétique
@@ -67,7 +71,8 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                                     EnvelExist=envel.Het, # tells to recycle the enveloppe computed to determin automatic threshold
                                     msmooth=c(220.5, 90), # Resolution : 0.005 seconde # Cosmétique
                                     plotoutline = F,
-                                    main=paste0(filename," : Left channel (Heterodyne)")) # 
+                                    main=paste0(filename," : Left channel (Heterodyne)"),
+                                    cex.main=0.9) # 
       dev.off()
       
       if(timer.smpl.peaks$first == "pause"){
@@ -133,17 +138,22 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     } else {DF.Het <- data.frame(Folder=fol.name, Full5sec= "Pas de contact hétérodyne")
     logi.Het <- FALSE}
   }
-  ### TIME EXPANSION ####
+  ########################################################################################
+  ############################### TIME EXPANSION #########################################
+  ########################################################################################
   if(typeOfAnalysis == "T" | typeOfAnalysis == "B"){
     smp.rch <- channel(wave, "right")
     ##### Detect chunks of time expansion
+    if(dev.cur() > 1) dev.off()
     png(paste0(substr(filename,1,nchar(filename)-4),"_GlobTE.png"),
         width = 600, height = 400, res=80)
     tr <- timer.abs(smp.rch, threshold=10, msmooth = c(8820,50)
-                    , main=paste0(filename, " : right channel (Time expansion)\nDetect chunks")) #resolution: 2 sec
+                    , main=paste0(filename,
+                                  " : right channel (Time expansion)\nDetect chunks"),
+                    cex.main=0.9) #resolution: 2 sec
     dev.off()
-    # Correct timer to not include gaps of less tha 1.7 sec
-    logiGapTE <- c(TRUE, tr$p[-c(1, length(tr$p))] > 1.7 ,TRUE)
+    # Correct timer to not include gaps of less than (~~1.7 sec~~) 0.5 sec (! adpted because cannot be too much amplitude = 0 inside chunk cf. auto threshold)
+    logiGapTE <- c(TRUE, tr$p[-c(1, length(tr$p))] > 0.5 ,TRUE)
     S_Start <- tr$s.start[logiGapTE[-length(logiGapTE)]]
     S_End <- tr$s.end[logiGapTE[-1]]
     tr$s.start <- S_Start
@@ -182,31 +192,23 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
         ## FIRST step detect the background noise.
         envel <- as.vector(env(chnk[[j]], f=44100, envt="abs"
                                , msmooth = c(44.1,0), plot=F))
-        envelTrun <- envel[envel < 400 & envel > 100] # truncate envel to min 100 & max 400 to find max of noise!
+        envelTrun <- envel[envel < 400 & envel > 10] # truncate envel to min 100 & max 400 to find max of noise!
         rg <- range(envel)[2] - range(envel)[1] 
         distriEnvel <- table(cut(envelTrun, 150))
         Peak <- names(which.max(distriEnvel))
-        thSigAuto[j] <- round(as.numeric(substring(Peak,2,
-                                                   regexpr(",",Peak, fixed=T)-1)) + 400) # +350-400 ou max + range/90 càd 90% range/100
+        thSigAuto_Peak <- as.numeric(substring(Peak,
+                                               regexpr(",", Peak, fixed=T)+1,
+                                               regexpr("]", Peak, fixed=T)-1))
+        
+        thSigAuto[j] <- round(thSigAuto_Peak + (1.4 * thSigAuto_Peak))
         if(thSigAuto[j] > max(envel)){thSigAuto[j] <- max(envel) - 5}
-#        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,0), plot=F)
-#        rg <- range(envel)[2] - range(envel)[1] # ca. 2000 => cut 500 breaks!?
-#        distriEnvel <- table(cut(envel, rg/20))
-#        whichPeak <- which.max(distriEnvel)
-#        name95 <- names(which(
-#          cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[2])
-#        if(is.na(name95)){
-#          name95 <- names(which(
-#            cumsum(tail(distriEnvel,-whichPeak)) / sum(tail(distriEnvel,-whichPeak)) > 0.95)[1])
-#        }
-#        thSigAuto[j] <- round(as.numeric(substring(name95,2,
-#                                                   regexpr(",",name95, fixed=T)-1)) + 10) # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
         tr.chk[[j]] <- timer.abs(chnk[[j]], # Cosmétique
                                  f=44100, # Cosmétique
                                  threshold=thSigAuto[j],
                                  EnvelExist=envel,
                                  msmooth = c(44.1,90), # Cosmétique
-                                 plot=F, plotoutline = F, main=paste("Chunk",j))
+                                 plot=ShowChunks, plotoutline = F,
+                                 main=paste("Chunk",j))
         ### make equal length of start and end vectors by adding -if unequal- total length
         if(length(tr.chk[[j]]$s.start) > length(tr.chk[[j]]$s.end)){
           tr.chk[[j]]$s.end[length(tr.chk[[j]]$s.start)] <- (length(chnk[[j]]) / 44100)-0.05}
@@ -429,7 +431,7 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     autoSizeColumn(SHEET_x, 1:10)
   }
   filenameNoExt <-  substring(filename,1,nchar(filename)-4)
-  saveWorkbook(wb, paste0(fol.name,"_",filenameNoExt,"_",info,"_WL",myWL,".xlsx"))
+  if(MuteXLSXoutput){saveWorkbook(wb, paste0(fol.name,"_",filenameNoExt,"_",info,"_WL",myWL,".xlsx"))}
 }
 
 
