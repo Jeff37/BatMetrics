@@ -11,18 +11,19 @@ fol.name <- path.stspt[[1]][length(path.stspt[[1]])]
 list.files(pattern = "wav",ignore.case=T)
 
 #### Analyse par fichier: change filename and comment
-filename <- list.files(pattern = "wav",ignore.case=T)[3]
+filename <- list.files(pattern = "wav",ignore.case=T)[13]
 PI <- "Het&TE_Huqueny2016_SessII"
 smpl <- readWave(filename) # tuneR::readWave()
 system.time(BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B"))
 
 ### Analyse en série
-AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(5:8)]
+AllFiles <- list.files(pattern = "wav",ignore.case=T)[c(2:7,11:12)]
 PI <- "Het&TE_Huqueny2016_SessII"
 system.time(sapply(AllFiles, function(x){
   filename <<- x
   smpl <- readWave(filename) # tuneR::readWave()
   BatMetrics(wave=smpl, info=PI, typeOfAnalysis = "B")
+#  dev.off() # just in case!!
 }))
 
 ###################################
@@ -36,9 +37,7 @@ system.time(sapply(AllFiles, function(x){
 ##
 #
 BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
-                       myWL=256, amp.chk=500
-                       #                       , thSig=700, noiseHet=noise # Deprecated since the threshold is computed automatically
-){
+                       myWL=256, amp.chk=500){
   ### PACKAGES ##########
   require('seewave')
   require('xlsx')
@@ -53,19 +52,20 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
     main.rg <- range(smp.lch@left)
     ###### Identify the background noise level
     envel.Het <- env(smp.lch, f=44100, envt="abs", msmooth = c(220.5,90), plot=F)
-    name.diff_Het <- names(which(tail(abs(diff(table(cut(envel.Het,1000)))),-20) < 100 )[1]) ### Consider a drop of 100 units between to classes (cut(1000) ... BOF!?
-    thHetAuto <- as.numeric(substring(
-      name.diff_Het,2,
-      regexpr(",",name.diff_Het, fixed=T)-1)) + 5 # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated. I kept an empirical value of +10 from the calculated threshold.
+    rg.Het <- range(envel.Het)[2] - range(envel.Het)[1] 
+    distriEnvel <- table(cut(envel.Het, round(rg.Het/10)))
+    Peak <- names(which.max(distriEnvel))
+    thHetAuto <- round(as.numeric(substring(Peak,2,
+                                               regexpr(",",Peak, fixed=T)-1)) + 50) # +50 => **very** sensible!!
 ########
     if((main.rg[2]-main.rg[1]) > 2000){# Value of 2000 chosen empirically!! Discard empty samples
       logi.Het <- TRUE
       png(paste0(substr(filename,1,nchar(filename)-4),"_GlobHet.png"),
           width = 600, height = 400, res=80)
-      timer.smpl.peaks <- timer.abs(smp.lch,
+      timer.smpl.peaks <- timer.abs(smp.lch, # Cosmétique
                                     threshold=thHetAuto, # use the threshold computed inside od the function
                                     EnvelExist=envel.Het, # tells to recycle the enveloppe computed to determin automatic threshold
-                                    #                                    msmooth=c(220.5, 90), # Resolution : 0.005 seconde
+                                    msmooth=c(220.5, 90), # Resolution : 0.005 seconde # Cosmétique
                                     plotoutline = F,
                                     main=paste0(filename," : Left channel (Heterodyne)")) # 
       dev.off()
@@ -92,14 +92,14 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
                      (ip1 < Dur.Int[2] & ip1 > Dur.Int[1]) &
                      (ip2 < Dur.Int[2] & ip2 > Dur.Int[1]) &
                      (ip3 < Dur.Int[2] & ip3 > Dur.Int[1])
-                   #                     &(ip4 < Dur.Int[2] & ip4 > Dur.Int[1])
+                     &(ip4 < Dur.Int[2] & ip4 > Dur.Int[1])
       ) |
         ((i < Dur.Int[2] & i > Dur.Int[1]) &
            (im1 < Dur.Int[2] & im1 > Dur.Int[1]) &
            (im2 < Dur.Int[2] & im2 > Dur.Int[1]) &
            (im3 < Dur.Int[2] & im3 > Dur.Int[1])
-         #           &(im4 < Dur.Int[2] & im4 > Dur.Int[1])
-        ) ## Detect 4 following gaps of < 0.6 sec
+           &(im4 < Dur.Int[2] & im4 > Dur.Int[1])
+        ) ## Detect 5 following gaps of < 0.6 sec
       logi.buz <- (i < Dur.Int[1] & ip1 < Dur.Int[1] & ip2 < Dur.Int[1] &
                      ip3 < Dur.Int[1] & ip4 < Dur.Int[1]) ## Detect 5 following gaps of < 0.01 sec
       
@@ -181,14 +181,14 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
       if(logi.chk[j]){
         ## FIRST step detect the background noise.
         envel <- as.vector(env(chnk[[j]], f=44100, envt="abs"
-                               , msmooth = c(441,0), plot=F))
+                               , msmooth = c(44.1,0), plot=F))
         envelTrun <- envel[envel < 400 & envel > 100] # truncate envel to min 100 & max 400 to find max of noise!
         rg <- range(envel)[2] - range(envel)[1] 
         distriEnvel <- table(cut(envelTrun, 150))
         Peak <- names(which.max(distriEnvel))
-        # max + rg/200 ??
         thSigAuto[j] <- round(as.numeric(substring(Peak,2,
                                                    regexpr(",",Peak, fixed=T)-1)) + 400) # +350-400 ou max + range/90 càd 90% range/100
+        if(thSigAuto[j] > max(envel)){thSigAuto[j] <- max(envel) - 5}
 #        envel <- env(chnk[[j]], f=44100, envt="abs", msmooth = c(44.1,0), plot=F)
 #        rg <- range(envel)[2] - range(envel)[1] # ca. 2000 => cut 500 breaks!?
 #        distriEnvel <- table(cut(envel, rg/20))
@@ -201,11 +201,12 @@ BatMetrics <- function(wave, info, typeOfAnalysis = c("H","T","B"),
 #        }
 #        thSigAuto[j] <- round(as.numeric(substring(name95,2,
 #                                                   regexpr(",",name95, fixed=T)-1)) + 10) # overrides the thSig provided as parameter in the function. If it works well, thSig will be deprecated
-        tr.chk[[j]] <- timer.abs(chnk[[j]],
-                                 f=44100,
+        tr.chk[[j]] <- timer.abs(chnk[[j]], # Cosmétique
+                                 f=44100, # Cosmétique
                                  threshold=thSigAuto[j],
-                                 msmooth = c(44.1,90),
-                                 plot=T, plotoutline = F, main=paste("Chunk",j))
+                                 EnvelExist=envel,
+                                 msmooth = c(44.1,90), # Cosmétique
+                                 plot=F, plotoutline = F, main=paste("Chunk",j))
         ### make equal length of start and end vectors by adding -if unequal- total length
         if(length(tr.chk[[j]]$s.start) > length(tr.chk[[j]]$s.end)){
           tr.chk[[j]]$s.end[length(tr.chk[[j]]$s.start)] <- (length(chnk[[j]]) / 44100)-0.05}
